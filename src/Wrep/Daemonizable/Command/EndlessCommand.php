@@ -18,7 +18,7 @@ use function pcntl_signal;
 
 abstract class EndlessCommand extends Command
 {
-    private const DEFAULT_TIMEOUT = 5;
+    public const DEFAULT_TIMEOUT = 5;
 
     private      $code;
     private int  $timeout;
@@ -388,5 +388,10 @@ abstract class EndlessCommand extends Command
      */
     protected function finalize(InputInterface $input, OutputInterface $output): void
     {
+    }
+
+    public function getDefaultTimeout()
+    {
+
     }
 }
