@@ -192,7 +192,7 @@ abstract class EndlessCommand extends Command
     {
         $lockFactory = new LockFactory(new FlockStore());
         $this->lock  = $lockFactory->createLock('blub', 3);
-        if (!$this->lock->isAcquired()) {
+        if ($this->lock->isAcquired()) {
             $output->writeln('The command is already running in another process.');
             throw new ShutdownEndlessCommandException('The command is already running in another process.');
         }
