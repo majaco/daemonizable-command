@@ -7,6 +7,7 @@ namespace Wrep\Daemonizable\Command;
 use Exception;
 use InvalidArgumentException;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Command\LockableTrait;
 use Symfony\Component\Console\Exception\LogicException;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -18,6 +19,8 @@ use function pcntl_signal;
 
 abstract class EndlessCommand extends Command
 {
+    use LockableTrait;
+
     public const DEFAULT_TIMEOUT = 5;
 
     private      $code;
@@ -176,9 +179,14 @@ abstract class EndlessCommand extends Command
      *
      * @param InputInterface  $input
      * @param OutputInterface $output
+     * @throws ShutdownEndlessCommandException
      */
     protected function starting(InputInterface $input, OutputInterface $output): void
     {
+        if (!$this->lock()) {
+            $output->writeln('The command is already running in another process.');
+            throw new ShutdownEndlessCommandException('The command is already running in another process.');
+        }
     }
 
     /**
@@ -388,6 +396,7 @@ abstract class EndlessCommand extends Command
      */
     protected function finalize(InputInterface $input, OutputInterface $output): void
     {
+        $this->release();
     }
 
     public function getDefaultTimeout()
