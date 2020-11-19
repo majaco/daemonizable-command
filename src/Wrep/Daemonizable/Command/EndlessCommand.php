@@ -12,8 +12,6 @@ use Symfony\Component\Console\Exception\LogicException;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Lock\LockFactory;
-use Symfony\Component\Lock\Store\FlockStore;
 use Throwable;
 use Wrep\Daemonizable\Exception\ShutdownEndlessCommandException;
 use function pcntl_async_signals;
@@ -126,7 +124,7 @@ abstract class EndlessCommand extends Command
                 $this->finishIteration($input, $output);
 
                 // refresh the locking
-                $this->lock->refresh($this->ttl);
+                #$this->lock->refresh($this->ttl);
 
                 // Request shutdown if we only should run once
                 if ((bool)$input->getOption('run-once')) {
@@ -190,7 +188,7 @@ abstract class EndlessCommand extends Command
      */
     protected function starting(InputInterface $input, OutputInterface $output): void
     {
-        if ($this->lock()) {
+        if (!$this->lock()) {
             $output->writeln('The command is already running in another process.');
             throw new ShutdownEndlessCommandException('The command is already running in another process.');
         }
