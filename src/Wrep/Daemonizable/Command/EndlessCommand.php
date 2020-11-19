@@ -12,6 +12,8 @@ use Symfony\Component\Console\Exception\LogicException;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\FlockStore;
 use Throwable;
 use Wrep\Daemonizable\Exception\ShutdownEndlessCommandException;
 use function pcntl_async_signals;
@@ -25,6 +27,7 @@ abstract class EndlessCommand extends Command
 
     private      $code;
     private int  $timeout;
+    private int  $ttl;
     private int  $returnCode;
     private bool $shutdownRequested;
     private int  $lastUsage;
@@ -38,6 +41,7 @@ abstract class EndlessCommand extends Command
         // Construct our context
         $this->shutdownRequested = false;
         $this->setTimeout(static::DEFAULT_TIMEOUT);
+        $this->setTll(static::DEFAULT_TIMEOUT);
         $this->returnCode    = 0;
         $this->lastUsage     = 0;
         $this->lastPeakUsage = 0;
@@ -121,6 +125,9 @@ abstract class EndlessCommand extends Command
                 // Finish this iteration
                 $this->finishIteration($input, $output);
 
+                // refresh the locking
+                $this->lock->refresh($this->ttl);
+
                 // Request shutdown if we only should run once
                 if ((bool)$input->getOption('run-once')) {
                     $this->shutdown();
@@ -177,12 +184,14 @@ abstract class EndlessCommand extends Command
     /**
      * Called before first execute
      *
-     * @param InputInterface  $input
-     * @param OutputInterface $output
      * @throws ShutdownEndlessCommandException
+     * @param OutputInterface $output
+     * @param InputInterface  $input
      */
     protected function starting(InputInterface $input, OutputInterface $output): void
     {
+        $lockFactory = new LockFactory(new FlockStore());
+        $this->lock  = $lockFactory->createLock('blub', 3);
         if (!$this->lock()) {
             $output->writeln('The command is already running in another process.');
             throw new ShutdownEndlessCommandException('The command is already running in another process.');
@@ -402,5 +411,14 @@ abstract class EndlessCommand extends Command
     public function getDefaultTimeout()
     {
 
+    }
+    public function getTtl(): int
+    {
+        return $this->ttl;
+    }
+
+    protected function setTll(int $ttl)
+    {
+        $this->ttl = $ttl;
     }
 }
