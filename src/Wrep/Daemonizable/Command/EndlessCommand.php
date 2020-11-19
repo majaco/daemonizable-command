@@ -4,45 +4,51 @@ declare(strict_types=1);
 
 namespace Wrep\Daemonizable\Command;
 
-use Symfony\Component\Console\Exception\LogicException;
-use Wrep\Daemonizable\Exception\ShutdownEndlessCommandException;
+use Exception;
+use InvalidArgumentException;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Output\NullOutput;
+use Symfony\Component\Console\Exception\LogicException;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
+use Throwable;
+use Wrep\Daemonizable\Exception\ShutdownEndlessCommandException;
 use function pcntl_async_signals;
 use function pcntl_signal;
 
 abstract class EndlessCommand extends Command
 {
-    public const DEFAULT_TIMEOUT = 5;
+    private const DEFAULT_TIMEOUT = 5;
 
-    private $code;
-    private $timeout;
-    private $returnCode;
-    private $shutdownRequested;
-    private $lastUsage;
-    private $lastPeakUsage;
+    private      $code;
+    private int  $timeout;
+    private int  $returnCode;
+    private bool $shutdownRequested;
+    private int  $lastUsage;
+    private int  $lastPeakUsage;
 
     /**
-     * @see Symfony\Component\Console\Command\Command::__construct()
+     * @see \Symfony\Component\Console\Command\Command::__construct()
      */
     public function __construct(string $name = null)
     {
         // Construct our context
         $this->shutdownRequested = false;
         $this->setTimeout(static::DEFAULT_TIMEOUT);
-        $this->returnCode = 0;
-        $this->lastUsage = 0;
+        $this->returnCode    = 0;
+        $this->lastUsage     = 0;
         $this->lastPeakUsage = 0;
 
         // Construct parent context (also calls configure)
         parent::__construct($name);
 
         // Merge our options
-        $this->addOption('run-once', null, InputOption::VALUE_NONE,
-            'Run the command just once, do not go into an endless loop');
+        $this->addOption(
+            'run-once',
+            null,
+            InputOption::VALUE_NONE,
+            'Run the command just once, do not go into an endless loop'
+        );
         $this->addOption('detect-leaks', null, InputOption::VALUE_NONE, 'Output information about memory usage');
 
         // Set our runloop as the executable code
@@ -50,7 +56,7 @@ abstract class EndlessCommand extends Command
     }
 
     /**
-     * @see Symfony\Component\Console\Command\Command::run()
+     * @see \Symfony\Component\Console\Command\Command::run()
      */
     public function run(InputInterface $input, OutputInterface $output): int
     {
@@ -59,7 +65,7 @@ abstract class EndlessCommand extends Command
             // Enable async signals for fast signal processing
             try {
                 pcntl_async_signals(true);
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 declare(ticks=1);
             }
 
@@ -90,12 +96,12 @@ abstract class EndlessCommand extends Command
     /**
      * The big endless loop and management of signals/shutdown etc.
      *
-     * @param InputInterface $input An InputInterface instance
+     * @throws Exception
      * @param OutputInterface $output An OutputInterface instance
      *
      * @return integer The command exit code
      *
-     * @throws \Exception
+     * @param InputInterface  $input  An InputInterface instance
      */
     protected function runloop(InputInterface $input, OutputInterface $output)
     {
@@ -125,10 +131,26 @@ abstract class EndlessCommand extends Command
 
                     // Print report
                     $output->writeln('== MEMORY USAGE ==');
-                    $output->writeln(sprintf('Peak: %.02f KByte <%s>%s (%.03f %%)</%s>', $peak['amount'] / 1024,
-                        $peak['statusType'], $peak['statusDescription'], $peak['diffPercentage'], $peak['statusType']));
-                    $output->writeln(sprintf('Cur.: %.02f KByte <%s>%s (%.03f %%)</%s>', $curr['amount'] / 1024,
-                        $curr['statusType'], $curr['statusDescription'], $curr['diffPercentage'], $curr['statusType']));
+                    $output->writeln(
+                        sprintf(
+                            'Peak: %.02f KByte <%s>%s (%.03f %%)</%s>',
+                            $peak['amount'] / 1024,
+                            $peak['statusType'],
+                            $peak['statusDescription'],
+                            $peak['diffPercentage'],
+                            $peak['statusType']
+                        )
+                    );
+                    $output->writeln(
+                        sprintf(
+                            'Cur.: %.02f KByte <%s>%s (%.03f %%)</%s>',
+                            $curr['amount'] / 1024,
+                            $curr['statusType'],
+                            $curr['statusDescription'],
+                            $curr['diffPercentage'],
+                            $curr['statusType']
+                        )
+                    );
                     $output->writeln('');
 
                     // Unset variables to prevent unstable memory usage
@@ -136,10 +158,10 @@ abstract class EndlessCommand extends Command
                 }
 
                 // Sleep some time, note that sleep will be interrupted by a signal
-                if (! $this->shutdownRequested) {
+                if (!$this->shutdownRequested) {
                     usleep($this->timeout);
                 }
-            } while (! $this->shutdownRequested);
+            } while (!$this->shutdownRequested);
         } catch (ShutdownEndlessCommandException $ignore) {
         }
 
@@ -151,7 +173,8 @@ abstract class EndlessCommand extends Command
 
     /**
      * Called before first execute
-     * @param InputInterface $input
+     *
+     * @param InputInterface  $input
      * @param OutputInterface $output
      */
     protected function starting(InputInterface $input, OutputInterface $output): void
@@ -160,7 +183,8 @@ abstract class EndlessCommand extends Command
 
     /**
      * Called before each iteration
-     * @param InputInterface $input
+     *
+     * @param InputInterface  $input
      * @param OutputInterface $output
      */
     protected function startIteration(InputInterface $input, OutputInterface $output): void
@@ -169,7 +193,8 @@ abstract class EndlessCommand extends Command
 
     /**
      * Called after each iteration
-     * @param InputInterface $input
+     *
+     * @param InputInterface  $input
      * @param OutputInterface $output
      */
     protected function finishIteration(InputInterface $input, OutputInterface $output): void
@@ -185,20 +210,20 @@ abstract class EndlessCommand extends Command
      */
     private function getMemoryInfo(bool $peak = false): array
     {
-        $lastUsage = ($peak) ? $this->lastPeakUsage : $this->lastUsage;
-        $info['amount'] = ($peak) ? memory_get_peak_usage() : memory_get_usage();
-        $info['diff'] = $info['amount'] - $lastUsage;
-        $info['diffPercentage'] = ($lastUsage == 0) ? 0 : $info['diff'] / ($lastUsage / 100);
+        $lastUsage                 = ($peak) ? $this->lastPeakUsage : $this->lastUsage;
+        $info['amount']            = ($peak) ? memory_get_peak_usage() : memory_get_usage();
+        $info['diff']              = $info['amount'] - $lastUsage;
+        $info['diffPercentage']    = ($lastUsage == 0) ? 0 : $info['diff'] / ($lastUsage / 100);
         $info['statusDescription'] = 'stable';
-        $info['statusType'] = 'info';
+        $info['statusType']        = 'info';
 
         if ($info['diff'] > 0) {
             $info['statusDescription'] = 'increasing';
-            $info['statusType'] = 'error';
+            $info['statusType']        = 'error';
         } else {
             if ($info['diff'] < 0) {
                 $info['statusDescription'] = 'decreasing';
-                $info['statusType'] = 'comment';
+                $info['statusType']        = 'comment';
             }
         }
 
@@ -213,14 +238,14 @@ abstract class EndlessCommand extends Command
     }
 
     /**
-     * @see Symfony\Component\Console\Command\Command::setCode()
+     * @see \Symfony\Component\Console\Command\Command::setCode()
      */
     public function setCode(callable $code)
     {
         // Exact copy of our parent
         // Makes sure we can access to call it every iteration
-        if (! is_callable($code)) {
-            throw new \InvalidArgumentException('Invalid callable provided to Command::setCode.');
+        if (!is_callable($code)) {
+            throw new InvalidArgumentException('Invalid callable provided to Command::setCode.');
         }
 
         $this->code = $code;
@@ -236,12 +261,12 @@ abstract class EndlessCommand extends Command
      * example), process small batches and call the throwExceptionOnShutdown whenever you can.
      * This prevents unexpected kills of the process and makes shutdown fast.
      *
-     * @param InputInterface $input An InputInterface instance
+     * @throws LogicException When this abstract method is not implemented
      * @param OutputInterface $output An OutputInterface instance
      *
      * @return int 0 if everything went fine, or an exit code
      *
-     * @throws LogicException When this abstract method is not implemented
+     * @param InputInterface  $input  An InputInterface instance
      * @see    setCode()
      */
     protected function execute(InputInterface $input, OutputInterface $output)
@@ -252,19 +277,19 @@ abstract class EndlessCommand extends Command
     /**
      * Set the timeout of this command.
      *
-     * @param int|float $timeout Timeout between two iterations in seconds
-     *
+     * @throws InvalidArgumentException
      * @return Command The current instance
      *
-     * @throws \InvalidArgumentException
+     * @param int|float $timeout Timeout between two iterations in seconds
+     *
      */
     public function setTimeout(float $timeout)
     {
         if ($timeout < 0) {
-            throw new \InvalidArgumentException('Invalid timeout provided to Command::setTimeout.');
+            throw new InvalidArgumentException('Invalid timeout provided to Command::setTimeout.');
         }
 
-        $this->timeout = (int) (1000000 * $timeout);
+        $this->timeout = (int)(1000000 * $timeout);
 
         return $this;
     }
@@ -282,16 +307,16 @@ abstract class EndlessCommand extends Command
     /**
      * Set the return code of this command.
      *
-     * @param int 0 if everything went fine, or an error code
-     *
+     * @throws InvalidArgumentException
      * @return Command The current instance
      *
-     * @throws \InvalidArgumentException
+     * @param int 0 if everything went fine, or an error code
+     *
      */
     public function setReturnCode(int $returnCode)
     {
         if ($returnCode < 0) {
-            throw new \InvalidArgumentException('Invalid returnCode provided to Command::setReturnCode.');
+            throw new InvalidArgumentException('Invalid returnCode provided to Command::setReturnCode.');
         }
 
         $this->returnCode = $returnCode;
@@ -331,9 +356,9 @@ abstract class EndlessCommand extends Command
      * execution code takes quite long to finish on a point where you still can exit
      * without corrupting any data.
      *
+     * @throws ShutdownEndlessCommandException
      * @return Command The current instance
      *
-     * @throws ShutdownEndlessCommandException
      */
     protected function throwExceptionOnShutdown()
     {
@@ -343,7 +368,9 @@ abstract class EndlessCommand extends Command
         }
 
         if ($this->shutdownRequested) {
-            throw new ShutdownEndlessCommandException('Volunteered to break out of the EndlessCommand runloop because a shutdown is requested.');
+            throw new ShutdownEndlessCommandException(
+                'Volunteered to break out of the EndlessCommand runloop because a shutdown is requested.'
+            );
         }
 
         return $this;
@@ -356,7 +383,7 @@ abstract class EndlessCommand extends Command
      * exit because of a signal changes are the process will be killed! It's the counterpart
      * of initialize().
      *
-     * @param InputInterface $input An InputInterface instance
+     * @param InputInterface  $input  An InputInterface instance
      * @param OutputInterface $output An OutputInterface instance, will be a NullOutput if the verbose is not set
      */
     protected function finalize(InputInterface $input, OutputInterface $output): void
