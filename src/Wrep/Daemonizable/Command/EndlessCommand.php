@@ -408,6 +408,7 @@ abstract class EndlessCommand extends Command
     {
 
     }
+
     public function getTtl(): int
     {
         return $this->ttl;
@@ -416,5 +417,10 @@ abstract class EndlessCommand extends Command
     protected function setTll(int $ttl)
     {
         $this->ttl = $ttl;
+    }
+
+    protected function releaseLock(): void
+    {
+        $this->release();
     }
 }
