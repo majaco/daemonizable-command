@@ -188,10 +188,10 @@ abstract class EndlessCommand extends Command
      */
     protected function starting(InputInterface $input, OutputInterface $output): void
     {
-        #if (!$this->lock()) {
-        #    $output->writeln('The command is already running in another process.');
-        #    throw new ShutdownEndlessCommandException('The command is already running in another process.');
-        #}
+        if (!$this->lock()) {
+            $output->writeln('The command is already running in another process.');
+            throw new ShutdownEndlessCommandException('The command is already running in another process.');
+        }
     }
 
     /**
